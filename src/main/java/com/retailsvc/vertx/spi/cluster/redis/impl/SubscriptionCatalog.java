@@ -2,8 +2,9 @@ package com.retailsvc.vertx.spi.cluster.redis.impl;
 
 import static java.util.Collections.emptySet;
 
-import io.vertx.core.spi.cluster.NodeSelector;
+import io.vertx.core.eventbus.impl.clustered.NodeSelector;
 import io.vertx.core.spi.cluster.RegistrationInfo;
+import io.vertx.core.spi.cluster.RegistrationListener;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,7 +35,7 @@ public class SubscriptionCatalog {
   private static final Logger log = LoggerFactory.getLogger(SubscriptionCatalog.class);
 
   private final RSetMultimap<String, RegistrationInfo> subsMap;
-  private final NodeSelector nodeSelector;
+  private final RegistrationListener nodeSelector;
   private final int listenerId;
   private final RTopic topic;
 
@@ -51,7 +52,7 @@ public class SubscriptionCatalog {
    * @param nodeSelector Vertx node selector
    */
   public SubscriptionCatalog(
-      RedissonClient redisson, RedisKeyFactory keyFactory, NodeSelector nodeSelector) {
+      RedissonClient redisson, RedisKeyFactory keyFactory, RegistrationListener nodeSelector) {
     this.nodeSelector = nodeSelector;
     subsMap = redisson.getSetMultimap(keyFactory.vertx("subs"));
     topic = redisson.getTopic(keyFactory.topic("subs"));
@@ -71,7 +72,7 @@ public class SubscriptionCatalog {
       SubscriptionCatalog predecessor,
       RedissonClient redisson,
       RedisKeyFactory redisKeyFactory,
-      NodeSelector nodeSelector) {
+      RegistrationListener nodeSelector) {
     this(redisson, redisKeyFactory, nodeSelector);
     ownSubs.putAll(predecessor.ownSubs);
     localSubs.putAll(predecessor.localSubs);

@@ -3,9 +3,10 @@ package com.retailsvc.vertx.spi.cluster.redis.impl.codec;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
-import io.vertx.core.shareddata.impl.ClusterSerializable;
 import java.io.IOException;
 import java.io.Serializable;
+
+import io.vertx.core.shareddata.ClusterSerializable;
 import org.redisson.client.codec.BaseCodec;
 import org.redisson.client.codec.Codec;
 import org.redisson.client.codec.IntegerCodec;

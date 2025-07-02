@@ -11,10 +11,11 @@ import io.netty.buffer.ByteBufAllocator;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.buffer.impl.BufferImpl;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.shareddata.AsyncMapTest;
 import io.vertx.core.spi.cluster.NodeInfo;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+
+import io.vertx.tests.shareddata.AsyncMapTest;
 import org.junit.jupiter.api.Test;
 import org.redisson.client.codec.Codec;
 import org.redisson.client.handler.State;
@@ -44,7 +45,7 @@ class ClusterSerializableCodecTest extends CodecTestBase {
   @Test
   void decodeFailsIfMissingClassName() {
     ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer();
-    Buffer buffer = BufferImpl.buffer(byteBuf);
+    Buffer buffer = new BufferImpl(byteBuf);
     info.writeToBuffer(buffer);
     assertThrows(IOException.class, () -> codec.getValueDecoder().decode(byteBuf, new State()));
   }
@@ -66,10 +67,10 @@ class ClusterSerializableCodecTest extends CodecTestBase {
   @SuppressWarnings("deprecation")
   @Test
   void encodeDecodeSomeClusterSerializableImplObject() {
-    var original = new AsyncMapTest.SomeClusterSerializableImplObject("Test");
+    var original = new AsyncMapTest.SomeClusterSerializableObject("Test");
     ByteBuf buf = assertDoesNotThrow(() -> codec.getValueEncoder().encode(original));
     Object decoded = assertDoesNotThrow(() -> codec.getValueDecoder().decode(buf, new State()));
-    assertInstanceOf(AsyncMapTest.SomeClusterSerializableImplObject.class, decoded);
+    assertInstanceOf(AsyncMapTest.SomeClusterSerializableObject.class, decoded);
     assertEquals(original, decoded);
   }
 

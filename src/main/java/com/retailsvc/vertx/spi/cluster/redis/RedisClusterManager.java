@@ -1,35 +1,28 @@
 package com.retailsvc.vertx.spi.cluster.redis;
 
-import static java.util.Collections.singleton;
-
 import com.retailsvc.vertx.spi.cluster.redis.config.RedisConfig;
-import com.retailsvc.vertx.spi.cluster.redis.impl.CloseableLock;
-import com.retailsvc.vertx.spi.cluster.redis.impl.NodeInfoCatalog;
-import com.retailsvc.vertx.spi.cluster.redis.impl.NodeInfoCatalogListener;
-import com.retailsvc.vertx.spi.cluster.redis.impl.RedissonContext;
-import com.retailsvc.vertx.spi.cluster.redis.impl.RedissonRedisInstance;
-import com.retailsvc.vertx.spi.cluster.redis.impl.SubscriptionCatalog;
-import io.vertx.core.Promise;
+import com.retailsvc.vertx.spi.cluster.redis.impl.*;
+import io.vertx.core.Completable;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.eventbus.impl.clustered.NodeSelector;
+import io.vertx.core.internal.VertxInternal;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
-import io.vertx.core.spi.cluster.ClusterManager;
-import io.vertx.core.spi.cluster.NodeInfo;
-import io.vertx.core.spi.cluster.NodeListener;
-import io.vertx.core.spi.cluster.NodeSelector;
-import io.vertx.core.spi.cluster.RegistrationInfo;
+import io.vertx.core.spi.cluster.*;
+import org.redisson.api.RedissonClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import org.redisson.api.RedissonClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static java.util.Collections.singleton;
 
 /**
  * A Vert.x cluster manager for Redis.
@@ -42,14 +35,12 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   private final RedissonContext redissonContext;
 
   private VertxInternal vertx;
-  private NodeSelector nodeSelector;
+  private RegistrationListener nodeSelector;
   private String nodeId;
   private NodeInfo nodeInfo;
   private NodeListener nodeListener;
-
   private final AtomicBoolean active = new AtomicBoolean();
   private final ReentrantLock lock = new ReentrantLock();
-
   private RedissonRedisInstance dataGrid;
 
   private NodeInfoCatalog nodeInfoCatalog;
@@ -75,23 +66,24 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   /**
    * Create a Redis cluster manager with specified configuration.
    *
-   * @param config the redis configuration
+   * @param config          the redis configuration
    * @param dataClassLoader class loader used to restore keys and values returned from Redis
    */
   public RedisClusterManager(RedisConfig config, ClassLoader dataClassLoader) {
     redissonContext = new RedissonContext(config, dataClassLoader);
   }
 
+
   @Override
-  public void init(Vertx vertx, NodeSelector nodeSelector) {
+  public void init(Vertx vertx) {
     this.vertx = (VertxInternal) vertx;
-    this.nodeSelector = nodeSelector;
   }
 
   @Override
-  public <K, V> void getAsyncMap(String name, Promise<AsyncMap<K, V>> promise) {
-    promise.complete(dataGrid.getAsyncMap(name));
+  public <K, V> void getAsyncMap(String name, Completable<AsyncMap<K, V>> promise) {
+    promise.succeed(dataGrid.getAsyncMap(name));
   }
+
 
   @Override
   public <K, V> Map<K, V> getSyncMap(String name) {
@@ -99,19 +91,20 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   }
 
   @Override
-  public void getLockWithTimeout(String name, long timeout, Promise<Lock> promise) {
+  public void getLockWithTimeout(String name, long timeout, Completable<Lock> promise) {
     dataGrid.getLockWithTimeout(name, timeout).onComplete(promise);
   }
 
   @Override
-  public void getCounter(String name, Promise<Counter> promise) {
-    promise.complete(dataGrid.getCounter(name));
+  public void getCounter(String name, Completable<Counter> promise) {
+    promise.succeed(dataGrid.getCounter(name));
   }
 
   @Override
   public String getNodeId() {
     return nodeId;
   }
+
 
   @Override
   public List<String> getNodes() {
@@ -123,8 +116,9 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
     this.nodeListener = listener;
   }
 
+
   @Override
-  public void setNodeInfo(NodeInfo nodeInfo, Promise<Void> promise) {
+  public void setNodeInfo(NodeInfo nodeInfo, Completable<Void> promise) {
     try (var ignored = CloseableLock.lock(lock)) {
       this.nodeInfo = nodeInfo;
     }
@@ -145,8 +139,9 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
     }
   }
 
+
   @Override
-  public void getNodeInfo(String nodeId, Promise<NodeInfo> promise) {
+  public void getNodeInfo(String nodeId, Completable<NodeInfo> promise) {
     vertx
         .executeBlocking(
             () -> {
@@ -162,7 +157,7 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   }
 
   @Override
-  public void join(Promise<Void> promise) {
+  public void join(Completable<Void> promise) {
     vertx
         .<Void>executeBlocking(
             () -> {
@@ -237,7 +232,9 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
     }
   }
 
-  /** Re-register self in the cluster. */
+  /**
+   * Re-register self in the cluster.
+   */
   private void registerSelfAgain() {
     try (var ignored = CloseableLock.lock(lock)) {
       nodeInfoCatalog.setNodeInfo(getNodeInfo());
@@ -252,8 +249,9 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
     }
   }
 
+
   @Override
-  public void leave(Promise<Void> promise) {
+  public void leave(Completable<Void> promise) {
     vertx
         .<Void>executeBlocking(
             () -> {
@@ -281,6 +279,7 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
         .onComplete(promise);
   }
 
+
   private void closeCatalogs() {
     subscriptionCatalog.close();
     nodeInfoCatalog.close();
@@ -292,8 +291,14 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   }
 
   @Override
+  public void registrationListener(RegistrationListener registrationListener) {
+    this.nodeSelector = registrationListener;
+  }
+
+
+  @Override
   public void addRegistration(
-      String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
+      String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
     vertx
         .<Void>executeBlocking(
             () -> {
@@ -306,7 +311,7 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
 
   @Override
   public void removeRegistration(
-      String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
+      String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
     vertx
         .<Void>executeBlocking(
             () -> {
@@ -318,7 +323,7 @@ public class RedisClusterManager implements ClusterManager, NodeInfoCatalogListe
   }
 
   @Override
-  public void getRegistrations(String address, Promise<List<RegistrationInfo>> promise) {
+  public void getRegistrations(String address, Completable<List<RegistrationInfo>> promise) {
     vertx.executeBlocking(() -> subscriptionCatalog.get(address), false).onComplete(promise);
   }
 
